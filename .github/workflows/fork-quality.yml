@@ -1,0 +1,28 @@
+name: Fork dependency and source checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  quality:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PATHS_TEST_INSTALL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm install --global npm@10
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run test:unit -- --maxWorkers=2
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
