@@ -36,18 +36,37 @@ function writeJson(directory: string, path: string, value: unknown): void {
 }
 
 function runNode(script: string, args: string[], cwd: string, env: Record<string, string> = {}) {
+    const childEnv = { ...process.env };
+    for (const [name, value] of Object.entries(env)) {
+        // Windows treats environment names as case-insensitive; Node keeps the
+        // first spelling when spawning, so remove inherited duplicates first.
+        for (const inherited of Object.keys(childEnv)) {
+            if (inherited.toLowerCase() === name.toLowerCase()) delete childEnv[inherited];
+        }
+        childEnv[name] = value;
+    }
     return spawnSync(process.execPath, [script, ...args], {
         cwd,
         encoding: "utf8",
-        env: { ...process.env, ...env },
+        env: childEnv,
     });
 }
 
 function runNpm(args: string[], cwd: string) {
-    return spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", args, {
+    // Run the same npm CLI as the parent task. A .cmd launcher cannot be
+    // spawned directly on Windows, and the PATH can point to another version.
+    const npmCli = process.env.npm_execpath;
+    if (!npmCli || !npmCli.endsWith("npm-cli.js")) {
+        throw new Error("Run release-process tests through npm so npm_execpath identifies the CLI.");
+    }
+    // This is a separate package fixture, not a nested task in the parent package.
+    const childEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([name]) => !name.toLowerCase().startsWith("npm_"))
+    );
+    return spawnSync(process.execPath, [npmCli, ...args], {
         cwd,
         encoding: "utf8",
-        env: process.env,
+        env: childEnv,
     });
 }
 
